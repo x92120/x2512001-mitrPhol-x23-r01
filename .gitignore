@@ -1,1 +1,10 @@
 node_modules
+__pycache__
+*.pyc
+venv/
+.nuxt/
+.env
+x2309-locMqtt/rabbitmq-data/
+x2390-history/influxdb_data/
+x2390-history/influxdb_config/
+x2391-gafana/grafana_data/

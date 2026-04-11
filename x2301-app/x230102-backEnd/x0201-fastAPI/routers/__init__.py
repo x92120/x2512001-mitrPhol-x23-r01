@@ -20,6 +20,7 @@ from .router_db_sync import router as db_sync_router
 from .router_server_station import router as server_station_router
 from .router_remote_server import router as remote_server_router
 from .router_plc import router as plc_router
+from .router_edge import router as edge_router
 
 __all__ = [
     "auth_router",
@@ -37,5 +38,6 @@ __all__ = [
     "db_sync_router",
     "server_station_router",
     "remote_server_router",
-    "plc_router"
+    "plc_router",
+    "edge_router"
 ]

@@ -65,9 +65,22 @@ def get_active_db_info() -> dict:
     }
 
 
-# Dependency
+# Dependency for Cloud
 def get_db():
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Engine and session for Locally Dockerized Buffer DB
+LOCAL_DB_HOST = "127.0.0.1"
+local_engine = _create_engine_for(LOCAL_DB_HOST)
+LocalSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=local_engine)
+
+# Dependency for Edge Buffer Db
+def get_local_db():
+    db = LocalSessionLocal()
     try:
         yield db
     finally:

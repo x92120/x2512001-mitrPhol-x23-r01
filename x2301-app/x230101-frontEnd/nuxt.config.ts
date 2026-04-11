@@ -7,12 +7,12 @@ export default defineNuxtConfig({
   ],
   app: {
     head: {
-      title: 'xMixing 2025',
+      title: 'xMixingControl-01',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'description', content: 'xMixing Control System 2025 - Production Management' },
-        { name: 'application-name', content: 'xMixing 2025' },
+        { name: 'application-name', content: 'xMixingControl-01' },
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/x_logo.svg' },

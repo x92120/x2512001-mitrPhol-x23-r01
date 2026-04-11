@@ -107,14 +107,16 @@ def get_production_plans(skip: int = 0, limit: int = 1000, status: Optional[str]
         # Overall recheck stats
         rc_rows = db.execute(sql_text("""
             SELECT 
-                SUBSTRING_INDEX(r.batch_record_id, '-', 4) AS bid,
-                COUNT(*) AS total,
+                q.batch_id AS bid,
+                COUNT(r.id) AS total,
                 SUM(CASE WHEN r.recheck_status = 1 THEN 1 ELSE 0 END) AS recheck_ok,
                 SUM(CASE WHEN r.recheck_status = 2 THEN 1 ELSE 0 END) AS recheck_err,
                 SUM(CASE WHEN r.packing_status = 1 THEN 1 ELSE 0 END) AS packed
             FROM prebatch_recs r
-            GROUP BY bid
-        """)).fetchall()
+            JOIN prebatch_reqs q ON r.req_id = q.id
+            WHERE q.batch_id IN :batch_ids
+            GROUP BY q.batch_id
+        """).bindparams(bindparam("batch_ids", expanding=True)), {"batch_ids": batch_id_strs}).fetchall()
         for r in rc_rows:
             recheck_map[r.bid] = {
                 'total': int(r.total), 'recheck_ok': int(r.recheck_ok),
@@ -125,14 +127,15 @@ def get_production_plans(skip: int = 0, limit: int = 1000, status: Optional[str]
         # Per-warehouse packed counts (join with prebatch_reqs for wh)
         wh_rows = db.execute(sql_text("""
             SELECT 
-                SUBSTRING_INDEX(r.batch_record_id, '-', 4) AS bid,
+                q.batch_id AS bid,
                 COALESCE(q.wh, 'Mix') AS wh,
-                COUNT(*) AS total,
+                COUNT(r.id) AS total,
                 SUM(CASE WHEN r.packing_status = 1 THEN 1 ELSE 0 END) AS packed
             FROM prebatch_recs r
-            LEFT JOIN prebatch_reqs q ON q.id = r.req_id
-            GROUP BY bid, wh
-        """)).fetchall()
+            JOIN prebatch_reqs q ON r.req_id = q.id
+            WHERE q.batch_id IN :batch_ids
+            GROUP BY q.batch_id, wh
+        """).bindparams(bindparam("batch_ids", expanding=True)), {"batch_ids": batch_id_strs}).fetchall()
         for r in wh_rows:
             if r.bid in recheck_map:
                 w = (r.wh or '').upper()

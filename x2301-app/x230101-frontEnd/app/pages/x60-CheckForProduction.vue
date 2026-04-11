@@ -288,14 +288,7 @@ const toggleRecStatus = async (rec: any) => {
 
 // ── Production Process View (Right Pane) ──
 const skuSteps = ref<any[]>([])
-const productionStarted = ref(false)
 const skuStepsLoading = ref(false)
-
-// ── Production Start Confirmation Dialog ──
-const showStartConfirm = ref(false)
-const plcSending = ref(false)
-const plcResult = ref<any>(null)   // Response from /plc/send-recipe
-const plcError = ref('')
 
 const fetchSkuSteps = async (skuId: string) => {
     skuStepsLoading.value = true
@@ -317,6 +310,24 @@ const openSkuDetail = async () => {
     if (selectedBatchInfo.value?.sku_id) {
         await fetchSkuSteps(selectedBatchInfo.value.sku_id)
         showSkuDetail.value = true
+    }
+}
+
+const goToStartProduction = async () => {
+    if (selectedBatchId.value) {
+        loading.value = true
+        try {
+            await $fetch<any>(`${appConfig.apiBaseUrl}/edge/start-batch/${selectedBatchId.value}`, {
+                method: 'POST',
+                headers: getAuthHeader() as Record<string, string>
+            })
+            useRouter().push(`/x61-MixingControl?batch_id=${selectedBatchId.value}`)
+        } catch (e: any) {
+            console.error('Edge buffer sync err:', e)
+            $q.notify({ type: 'negative', message: 'Failed to sync to Edge Buffer!' })
+        } finally {
+            loading.value = false
+        }
     }
 }
 
@@ -434,65 +445,14 @@ const prebatchByWarehouse = computed(() => {
     })
 })
 
-// Validation checks for production start
-const productionValidation = computed(() => {
-    const info = selectedBatchInfo.value
-    if (!info) return { valid: false, errors: ['No batch selected'] }
-    const errors: string[] = []
-    if (!info.fh_boxed) errors.push('FH packing box not closed')
-    if (!info.spp_boxed) errors.push('SPP packing box not closed')
-    return { valid: errors.length === 0, errors }
-})
-
-const startProduction = async () => {
-    const info = selectedBatchInfo.value
-    if (!info) return
-
-    // Load SKU steps for preview
-    await fetchSkuSteps(info.sku_id)
-
-    // Reset PLC state
-    plcResult.value = null
-    plcError.value = ''
-
-    // Show confirmation dialog (even if validation fails - show warnings)
-    showStartConfirm.value = true
-}
-
-const confirmStartProduction = async () => {
-    const info = selectedBatchInfo.value
-    if (!info) return
-
-    plcSending.value = true
-    plcError.value = ''
-    plcResult.value = null
-
-    try {
-        const result = await $fetch<any>(`${appConfig.apiBaseUrl}/plc/send-recipe/${info.batch_id}`, {
-            method: 'POST',
-            headers: getAuthHeader() as Record<string, string>
-        })
-        plcResult.value = result
-        productionStarted.value = true
-        showStartConfirm.value = false
-        showFeedback('success', `Recipe sent to PLC for batch ${info.batch_id}`, '🏭 PRODUCTION STARTED')
-        playSound('success')
-    } catch (error: any) {
-        plcError.value = error.data?.detail || error.message || 'Failed to send recipe to PLC'
-        showFeedback('error', plcError.value, 'PLC ERROR')
-        playSound('error')
-    } finally {
-        plcSending.value = false
-    }
-}
-
 
 const fetchPlansAndBatches = async () => {
     try {
         const resp = await $fetch<any>(`${appConfig.apiBaseUrl}/production-plans/?status=active`, {
             headers: getAuthHeader() as Record<string, string>
         })
-        const plans = resp.plans || resp || []
+        let plans = resp.plans || resp || []
+        plans = plans.filter((p: any) => p.plant === 'MIX-01' || p.plant === 'Line-1')
         allPlans.value = plans
         const batches: any[] = []
         plans.forEach((p: any) => {
@@ -544,7 +504,6 @@ const fetchBatchRecheck = async (batchId: string) => {
         recheckBatchId.value = batchId
         boxId.value = batchId
         boxDetails.value = null // Clear box-level data
-        productionStarted.value = false // Reset production view
         const s = data.summary
         showFeedback('success', `Batch loaded: ${s.total} items (${s.checked} checked, ${s.pending} pending)`, 'BATCH LOADED')
         playSound('success')
@@ -734,6 +693,22 @@ const resetBox = () => {
     boxId.value = ''
     boxScanInput.value = ''
     bagScanInput.value = ''
+}
+
+const startProductionAndOpenWindow = () => {
+    if (!activeBatchForProduction.value) return
+    const batchId = activeBatchForProduction.value
+    // Find the batch in allBatches
+    const batchInfo = allBatches.value.find(b => b.batch_id === batchId)
+    const plantId = batchInfo && batchInfo.plant ? String(batchInfo.plant).replace(/\D/g, '').padStart(2, '0') : '01'
+    
+    window.open(`/x65-ProductionControl?batch_id=${batchId}&plant=${plantId}`, '_blank', 'noopener,noreferrer,width=1200,height=900')
+}
+
+const printScreen = () => {
+    setTimeout(() => {
+        window.print()
+    }, 100)
 }
 
 // --- Scanner Simulator ---
@@ -1044,7 +1019,7 @@ const printQCReport = async () => {
     <table class="dt"><thead><tr><th style="width:3%">#</th><th>Batch Record ID</th><th>Plan ID</th><th>Mat SAP Code</th><th>RE Code</th><th class="tc">Pkg</th><th class="tc">Result</th><th>Checked By</th><th class="tc">Date</th></tr></thead>
     <tbody>${itemRows || '<tr><td colspan="9" class="tc">No records</td></tr>'}</tbody></table>
     <div class="grand"><span>Total Checked: ${s.total_checked || 0}</span><span>✅ ${s.passed || 0} Passed | ❌ ${s.failed || 0} Failed (${s.total_checked ? ((s.passed / s.total_checked) * 100).toFixed(1) : 0}% pass rate)</span></div>
-    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Quality Check Report</span></div>
+    <div class="footer"><span>xMixingControl-01 | xMix.co.th</span><span>Quality Check Report</span></div>
     </body></html>`
     printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
     showQCReportDialog.value = false
@@ -1069,7 +1044,6 @@ onMounted(() => {
           <div class="text-h6 text-weight-bolder">Check for Production</div>
         </div>
         <div class="row items-center q-gutter-sm">
-          <q-btn color="positive" icon="play_arrow" label="Start Production" class="q-mr-sm text-weight-bold" :disable="!activeBatchForProduction" @click="$router.push(`/x65-ProductionControl?batch_id=${activeBatchForProduction}`)" />
           <div class="text-caption text-blue-2">{{ t('recheck.subtitle') }}</div>
           <q-btn flat round dense icon="assessment" color="white" @click="showQCReportDialog = true"><q-tooltip>QC Report</q-tooltip></q-btn>
           <q-btn flat round dense icon="volume_up" color="white" @click="showSoundSettings = true"><q-tooltip>{{ t('sound.title') }}</q-tooltip></q-btn>
@@ -1210,6 +1184,7 @@ onMounted(() => {
                 <q-icon name="assignment" size="18px" class="q-mr-xs" />
                 <span>{{ selectedBatchInfo.plan_id }} · {{ selectedBatchInfo.sku_name }}</span>
                 <q-space />
+                <q-btn dense push color="deep-purple-9" text-color="white" icon="rocket_launch" label="Start Production" @click="goToStartProduction" class="q-mr-sm text-weight-bold" style="font-size: 12px; padding: 2px 8px;" />
                 <q-btn dense flat color="teal-9" icon="visibility" label="Check for Production Detail" @click="openSkuDetail" class="q-mr-sm" style="font-size: 12px;" />
                 <q-badge :color="selectedBatchInfo.fh_boxed ? 'green' : 'grey-4'" class="q-mr-xs" style="font-size: 12px;">FH</q-badge>
                 <q-badge :color="selectedBatchInfo.spp_boxed ? 'green' : 'grey-4'" style="font-size: 12px;">SPP</q-badge>
@@ -1531,105 +1506,6 @@ onMounted(() => {
       </q-card>
     </q-dialog>
 
-    <!-- ===== PRODUCTION START CONFIRMATION DIALOG ===== -->
-    <q-dialog v-model="showStartConfirm" persistent>
-      <q-card style="min-width: 520px; max-width: 650px;" class="shadow-6">
-        <!-- Header -->
-        <q-card-section class="bg-deep-purple-9 text-white q-pa-md">
-          <div class="row items-center q-gutter-sm">
-            <q-icon name="rocket_launch" size="28px" />
-            <div>
-              <div class="text-h6 text-weight-bold">Start Production</div>
-              <div class="text-caption text-deep-purple-2">Review batch details and confirm</div>
-            </div>
-          </div>
-        </q-card-section>
-
-        <!-- Batch Details -->
-        <q-card-section v-if="selectedBatchInfo" class="q-pa-md">
-          <div class="row q-col-gutter-sm">
-            <div class="col-6">
-              <div class="text-overline text-grey-7">Plan ID</div>
-              <div class="text-subtitle1 text-weight-bold text-teal-9">{{ selectedBatchInfo.plan_id }}</div>
-            </div>
-            <div class="col-6">
-              <div class="text-overline text-grey-7">Batch ID</div>
-              <div class="text-subtitle1 text-weight-bold text-indigo-9">{{ selectedBatchInfo.batch_id }}</div>
-            </div>
-            <div class="col-12">
-              <div class="text-overline text-grey-7">SKU</div>
-              <div class="text-subtitle1 text-weight-bold">{{ selectedBatchInfo.sku_id }} — {{ selectedBatchInfo.sku_name }}</div>
-            </div>
-            <div class="col-4">
-              <div class="text-overline text-grey-7">Plant</div>
-              <div class="text-body1">{{ selectedBatchInfo.plant || '-' }}</div>
-            </div>
-            <div class="col-4">
-              <div class="text-overline text-grey-7">Batch Size</div>
-              <div class="text-body1 text-weight-bold">{{ (selectedBatchInfo.batch_size || 0).toFixed(1) }} kg</div>
-            </div>
-            <div class="col-4">
-              <div class="text-overline text-grey-7">Steps</div>
-              <div class="text-body1">{{ skuSteps.length }} steps · {{ skuStepsByPhase.length }} phases</div>
-            </div>
-          </div>
-
-          <q-separator class="q-my-sm" />
-
-          <!-- FH/SPP Status Check -->
-          <div class="text-overline text-grey-7 q-mb-xs">Pre-Production Checks</div>
-          <div class="row q-gutter-sm q-mb-sm">
-            <q-chip :color="selectedBatchInfo.fh_boxed ? 'green' : 'red'" text-color="white" dense size="md">
-              <q-icon :name="selectedBatchInfo.fh_boxed ? 'check_circle' : 'cancel'" size="16px" class="q-mr-xs" />
-              FH {{ selectedBatchInfo.fh_boxed ? 'Packed ✓' : 'Not Packed ✗' }}
-            </q-chip>
-            <q-chip :color="selectedBatchInfo.spp_boxed ? 'green' : 'red'" text-color="white" dense size="md">
-              <q-icon :name="selectedBatchInfo.spp_boxed ? 'check_circle' : 'cancel'" size="16px" class="q-mr-xs" />
-              SPP {{ selectedBatchInfo.spp_boxed ? 'Packed ✓' : 'Not Packed ✗' }}
-            </q-chip>
-          </div>
-
-          <!-- Validation warnings -->
-          <q-banner v-if="!productionValidation.valid" dense rounded class="bg-red-1 text-red-9 q-mb-sm">
-            <template v-slot:avatar><q-icon name="warning" color="red" /></template>
-            <div class="text-weight-bold">Cannot start production:</div>
-            <ul class="q-ma-none q-pl-md" style="font-size: 13px;">
-              <li v-for="err in productionValidation.errors" :key="err">{{ err }}</li>
-            </ul>
-          </q-banner>
-
-          <!-- PLC Transfer Info -->
-          <q-banner v-if="productionValidation.valid" dense rounded class="bg-teal-1 text-teal-9 q-mb-sm">
-            <template v-slot:avatar><q-icon name="precision_manufacturing" color="teal" /></template>
-            <div class="text-weight-bold">Recipe will be sent to PLC (DB 1780)</div>
-            <div style="font-size: 12px;">{{ skuStepsByPhase.length }} processes × up to 8 steps → CodeSys → Siemens S7-1200</div>
-          </q-banner>
-
-          <!-- PLC Error -->
-          <q-banner v-if="plcError" dense rounded class="bg-red-1 text-red-9 q-mb-sm">
-            <template v-slot:avatar><q-icon name="error" color="red" /></template>
-            <div class="text-weight-bold">PLC Error</div>
-            <div style="font-size: 12px;">{{ plcError }}</div>
-          </q-banner>
-        </q-card-section>
-
-        <!-- Actions -->
-        <q-card-actions align="right" class="q-pa-md bg-grey-1">
-          <q-btn flat label="Cancel" color="grey" v-close-popup :disable="plcSending" />
-          <q-btn
-            push
-            :label="plcSending ? 'Sending to PLC...' : '✅ Confirm Start'"
-            :color="productionValidation.valid ? 'deep-purple' : 'grey'"
-            icon="play_arrow"
-            :loading="plcSending"
-            :disable="!productionValidation.valid || plcSending"
-            @click="confirmStartProduction"
-            class="text-weight-bold"
-            style="font-size: 14px;"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 

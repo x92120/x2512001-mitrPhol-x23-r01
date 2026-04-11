@@ -15,6 +15,7 @@ Routers:
 - plants_router: /plants/*
 - monitoring_router: /server-status/*
 - views_router: /api/v_* (database views)
+- edge_router: /edge/*
 
 Author: xDev
 Version: 1.0.0
@@ -46,7 +47,8 @@ from routers import (
     db_sync_router,
     server_station_router,
     remote_server_router,
-    plc_router
+    plc_router,
+    edge_router
 )
 
 # =============================================================================
@@ -100,7 +102,8 @@ all_routers = [
     db_sync_router,
     server_station_router,
     remote_server_router,
-    plc_router
+    plc_router,
+    edge_router
 ]
 
 for router in all_routers:

@@ -53,6 +53,10 @@ const handleLogout = async () => {
   navigateTo('/')
 }
 
+const printScreen = () => {
+  window.print()
+}
+
 </script>
 
 <template>
@@ -79,6 +83,11 @@ const handleLogout = async () => {
             style="min-width: 60px;"
           />
         </div>
+
+        <!-- Print Screen -->
+        <q-btn flat round dense icon="print" @click="printScreen" class="q-mr-sm">
+          <q-tooltip>Print Screen</q-tooltip>
+        </q-btn>
 
         <!-- Language Toggle -->
         <q-btn flat round dense @click="toggleLocale" class="q-mr-sm">
@@ -123,10 +132,11 @@ const handleLogout = async () => {
           label="Check for Production"
           v-if="hasPermission('production_list')"
         />
+
         <q-route-tab
-          to="/x65-ProductionControl"
+          to="/x61-MixingControl"
           icon="precision_manufacturing"
-          label="Production Control"
+          label="Mixing Control 01"
           v-if="hasPermission('production_list')"
         />
         <q-route-tab 
@@ -137,6 +147,7 @@ const handleLogout = async () => {
         <q-route-tab to="/x89-UserConfig" icon="manage_accounts" :label="t('nav.user')" v-if="hasPermission('admin')" />
         <q-route-tab to="/x90-systemDashboard" icon="dashboard" :label="t('nav.systemDashboard')" v-if="hasPermission('admin')" />
         <q-route-tab to="/x91-ServerStation" icon="dns" label="Server Station" v-if="hasPermission('admin')" />
+        <q-route-tab to="/x100-PlantMonitor" icon="monitor" label="Plant Monitor" />
         <q-route-tab to="/x99-About" icon="info" :label="t('nav.about')" />
       </q-tabs>
     </q-header>
